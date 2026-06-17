@@ -10,6 +10,7 @@ const skeletonLoader = document.getElementById('skeleton-loader');
 const emptyState = document.getElementById('empty-state');
 const updatesList = document.getElementById('updates-list');
 const refreshBtn = document.getElementById('refresh-btn');
+const exportCsvBtn = document.getElementById('export-csv-btn');
 const lastUpdatedTime = document.getElementById('last-updated-time');
 const searchInput = document.getElementById('search-input');
 const clearSearchBtn = document.getElementById('clear-search-btn');
@@ -43,6 +44,11 @@ function setupEventListeners() {
   // Refresh Feed
   refreshBtn.addEventListener('click', () => {
     fetchUpdates(true);
+  });
+
+  // Export to CSV
+  exportCsvBtn.addEventListener('click', () => {
+    exportToCSV();
   });
 
   // Search Filter
@@ -245,11 +251,46 @@ function applyFiltersAndRender() {
     card.innerHTML = `
       <div class="card-header">
         <span class="tag ${tagClass}">${update.type}</span>
-        <span class="card-date">${update.date}</span>
+        <div class="card-header-right">
+          <span class="card-date">${update.date}</span>
+          <button class="copy-card-btn" title="Copier la mise à jour dans le presse-papiers" aria-label="Copier la description">
+            <svg class="copy-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+        </div>
       </div>
       <h3>${escapeHTML(headline)}</h3>
       <div class="card-preview">${escapeHTML(update.text)}</div>
     `;
+    
+    // Copy button handler
+    const copyBtn = card.querySelector('.copy-card-btn');
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); // Stop click from triggering selection
+      
+      const copyText = `${update.type} (${update.date}) : ${update.text}\nLien: ${update.link}`;
+      navigator.clipboard.writeText(copyText).then(() => {
+        copyBtn.classList.add('success');
+        copyBtn.innerHTML = `
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        `;
+        setTimeout(() => {
+          copyBtn.classList.remove('success');
+          copyBtn.innerHTML = `
+            <svg class="copy-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          `;
+        }, 1500);
+      }).catch(err => {
+        console.error('Erreur lors de la copie: ', err);
+      });
+    });
     
     card.addEventListener('click', () => {
       selectUpdate(update);
@@ -381,4 +422,38 @@ function escapeHTML(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// Export current filtered updates list to CSV
+function exportToCSV() {
+  if (filteredUpdates.length === 0) {
+    alert("Aucune note de mise à jour à exporter.");
+    return;
+  }
+
+  const headers = ["Date", "Type", "Link", "Description"];
+  const rows = filteredUpdates.map(update => [
+    update.date,
+    update.type,
+    update.link,
+    update.text
+  ]);
+
+  let csvContent = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(",") + "\n";
+  rows.forEach(row => {
+    csvContent += row.map(val => `"${(val || '').replace(/"/g, '""')}"`).join(",") + "\n";
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  
+  const dateStr = new Date().toISOString().slice(0, 10);
+  link.setAttribute("download", `bigquery_release_notes_${dateStr}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
